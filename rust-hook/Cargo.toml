@@ -1,0 +1,14 @@
+[package]
+name = "cyclecount-hook"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cyclecount"
+crate-type = ["cdylib"]
+
+[dependencies]
+core-foundation = "0.9"
+core-foundation-sys = "0.8"
+io-kit-sys = "0.5"
+libc = "0.2"

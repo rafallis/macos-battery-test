@@ -1,0 +1,128 @@
+name: Build & Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:   # allow manual trigger from GitHub UI
+
+jobs:
+  test:
+    name: macOS ARM — build + test-hook
+    runs-on: macos-15   # Apple Silicon (M-series) runner
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Rust toolchain (arm64)
+      # -----------------------------------------------------------------------
+      - name: Install Rust aarch64 target
+        run: |
+          rustup update stable
+          rustup target add aarch64-apple-darwin
+
+      # -----------------------------------------------------------------------
+      # 3. Cache Cargo registry + build artifacts
+      # -----------------------------------------------------------------------
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-hook/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-hook/Cargo.toml', 'rust-hook/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # -----------------------------------------------------------------------
+      # 4. Cache Swift build artifacts
+      # -----------------------------------------------------------------------
+      - name: Cache Swift build
+        uses: actions/cache@v4
+        with:
+          path: swift-cli/.build
+          key: ${{ runner.os }}-swift-${{ hashFiles('swift-cli/Package.swift', 'swift-cli/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swift-
+
+      # -----------------------------------------------------------------------
+      # 5. Build Rust dylib
+      # -----------------------------------------------------------------------
+      - name: Build Rust dylib
+        working-directory: rust-hook
+        run: cargo build --release --target aarch64-apple-darwin
+
+      # -----------------------------------------------------------------------
+      # 6. Ad-hoc codesign the dylib
+      # -----------------------------------------------------------------------
+      - name: Codesign dylib (ad-hoc)
+        run: |
+          codesign --force --sign - \
+            rust-hook/target/aarch64-apple-darwin/release/libcyclecount.dylib
+
+      # -----------------------------------------------------------------------
+      # 7. Copy dylib into Swift resources
+      # -----------------------------------------------------------------------
+      - name: Copy dylib to Swift resources
+        run: |
+          mkdir -p swift-cli/Sources/battery-spoof/Resources
+          cp rust-hook/target/aarch64-apple-darwin/release/libcyclecount.dylib \
+             swift-cli/Sources/battery-spoof/Resources/libcyclecount.dylib
+
+      # -----------------------------------------------------------------------
+      # 8. Build Swift CLI
+      # -----------------------------------------------------------------------
+      - name: Build Swift CLI
+        working-directory: swift-cli
+        run: swift build -c release
+
+      # -----------------------------------------------------------------------
+      # 9. Codesign Swift binary (ad-hoc)
+      # -----------------------------------------------------------------------
+      - name: Codesign Swift binary (ad-hoc)
+        run: |
+          codesign --force --sign - \
+            swift-cli/.build/release/battery-spoof
+
+      # -----------------------------------------------------------------------
+      # 10. Read hardware cycle count (real battery on GitHub runner)
+      # -----------------------------------------------------------------------
+      - name: Read hardware CycleCount
+        run: swift-cli/.build/release/battery-spoof read
+
+      # -----------------------------------------------------------------------
+      # 11. Test DYLD injection pipeline
+      # -----------------------------------------------------------------------
+      - name: Test hook injection
+        run: swift-cli/.build/release/battery-spoof test-hook
+
+      # -----------------------------------------------------------------------
+      # 12. End-to-end: run ioreg with spoofed value
+      # -----------------------------------------------------------------------
+      - name: E2E — ioreg with CycleCount=999
+        run: |
+          swift-cli/.build/release/battery-spoof run --count 999 -- \
+            ioreg -l -n AppleSmartBattery 2>&1 | grep -i "CycleCount" || true
+
+      # -----------------------------------------------------------------------
+      # 13. End-to-end: system_profiler with spoofed value
+      # -----------------------------------------------------------------------
+      - name: E2E — system_profiler with CycleCount=999
+        run: |
+          swift-cli/.build/release/battery-spoof run --count 999 -- \
+            system_profiler SPPowerDataType 2>&1 | grep -i "Cycle" || true
+
+      # -----------------------------------------------------------------------
+      # 14. Upload binary as artifact (optional, for download)
+      # -----------------------------------------------------------------------
+      - name: Upload battery-spoof binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: battery-spoof-macos-arm64
+          path: swift-cli/.build/release/battery-spoof
+          retention-days: 7
