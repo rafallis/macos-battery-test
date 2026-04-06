@@ -94,6 +94,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Read hardware CycleCount
         run: swift-cli/.build/release/battery-spoof read
+        continue-on-error: true   # Mac mini runners have no battery — that's OK
 
       # -----------------------------------------------------------------------
       # 11. Test DYLD injection pipeline
