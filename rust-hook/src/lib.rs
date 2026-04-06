@@ -17,14 +17,11 @@
 #![allow(non_snake_case)]
 
 use core_foundation::base::{CFAllocatorRef, CFTypeRef, TCFType};
-use core_foundation::number::{CFNumber, CFNumberRef};
+use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
-use core_foundation_sys::base::{kCFAllocatorDefault, CFIndex};
 use core_foundation_sys::string::CFStringRef;
 use io_kit_sys::types::io_registry_entry_t;
 use libc::c_uint;
-use std::ffi::CStr;
-use std::os::raw::c_char;
 use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
