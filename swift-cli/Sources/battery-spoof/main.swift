@@ -14,6 +14,7 @@
 //   battery-spoof launch --count 999 --app "System Settings"
 //   battery-spoof launch --count 999 --app "coconutBattery"
 
+import AppKit
 import ArgumentParser
 import Foundation
 import IOKit
@@ -21,7 +22,6 @@ import IOKit
 // ---------------------------------------------------------------------------
 // Root command
 // ---------------------------------------------------------------------------
-@main
 struct BatterySpoof: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "battery-spoof",
@@ -419,3 +419,7 @@ struct TestChild: ParsableCommand {
         }
     }
 }
+
+// Top-level entry point (required because this file is named main.swift,
+// which prevents use of the @main attribute).
+BatterySpoof.main()
